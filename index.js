@@ -1,10 +1,9 @@
 // index.js
 import express from 'express';
-import bodyParser from 'body-parser';
 import { Client, middleware } from '@line/bot-sdk';
+import fetch from 'node-fetch'; // Node 18+ では不要かも
 
 const app = express();
-app.use(bodyParser.json());
 
 // =====================
 // LINE設定
@@ -16,7 +15,7 @@ const lineConfig = {
 const client = new Client(lineConfig);
 
 // =====================
-// 圧縮版梅男プロンプト（ローカル保持）
+// 圧縮版梅男プロンプト
 // =====================
 const UME_PROMPT = `
 あなたは「梅男」として会話します。特徴：
@@ -39,38 +38,27 @@ const UME_PROMPT = `
 // =====================
 // 相槌パターンと確率
 // =====================
-const REACTIONS = [
-  "なるほど",
-  "うんうん",
-  "そうですね",
-  "了解です",
-  "なるほどね",
-  "はいはい",
-  "わかります"
-];
-const REACTION_PROBABILITY = 0.7; // 70%の確率で相槌
+const REACTIONS = ["ふむ","うん","うーん","あ～","はい","あぁ"];
+const REACTION_PROBABILITY = 0.3;
 
 function shouldReact() {
   return Math.random() < REACTION_PROBABILITY;
 }
 
 function getRandomReaction() {
-  const idx = Math.floor(Math.random() * REACTIONS.length);
-  return REACTIONS[idx];
+  return REACTIONS[Math.floor(Math.random() * REACTIONS.length)];
 }
 
 // =====================
-// 会話履歴管理（ユーザーごとに短期保持）
+// 会話履歴管理（ユーザーごと）
 // =====================
 const userHistories = {};
-const MAX_HISTORY = 5; // 直近5件まで保持
+const MAX_HISTORY = 5;
 
 function addUserHistory(userId, role, content) {
   if (!userHistories[userId]) userHistories[userId] = [];
   userHistories[userId].push({ role, content });
-  if (userHistories[userId].length > MAX_HISTORY) {
-    userHistories[userId].shift();
-  }
+  if (userHistories[userId].length > MAX_HISTORY) userHistories[userId].shift();
 }
 
 function getUserHistory(userId) {
@@ -95,7 +83,7 @@ async function getGPTResponse(userId, userMessage) {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: "gpt-4.1-mini", // gpt-5-mini でも可
+      model: "gpt-4.1-mini",
       messages: messages,
       temperature: 0.7
     })
@@ -107,16 +95,11 @@ async function getGPTResponse(userId, userMessage) {
   try {
     gptOutput = JSON.parse(data.choices[0].message.content);
   } catch {
-    gptOutput = {
-      reaction: null,
-      response: data.choices[0].message.content
-    };
+    gptOutput = { reaction: null, response: data.choices[0].message.content };
   }
 
-  // 相槌ランダム化
   gptOutput.reaction = shouldReact() ? getRandomReaction() : null;
 
-  // 履歴にAI回答を追加
   addUserHistory(userId, "assistant", gptOutput.response);
 
   return gptOutput;
@@ -134,28 +117,15 @@ app.post("/webhook", middleware(lineConfig), async (req, res) => {
 
       const gptOutput = await getGPTResponse(userId, userMessage);
 
-      // 相槌送信（ある場合のみ）
       if (gptOutput.reaction) {
-        await client.replyMessage(event.replyToken, {
-          type: "text",
-          text: gptOutput.reaction
-        });
+        await client.replyMessage(event.replyToken, { type: "text", text: gptOutput.reaction });
       } else {
-        // 相槌なし → 空返信でack
-        await client.replyMessage(event.replyToken, {
-          type: "text",
-          text: ""
-        });
+        await client.replyMessage(event.replyToken, { type: "text", text: "" });
       }
 
-      // 具体的回答送信
-      await client.pushMessage(userId, {
-        type: "text",
-        text: gptOutput.response
-      });
+      await client.pushMessage(userId, { type: "text", text: gptOutput.response });
     }
   }));
-
   res.sendStatus(200);
 });
 
@@ -163,6 +133,4 @@ app.post("/webhook", middleware(lineConfig), async (req, res) => {
 // サーバー起動
 // =====================
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
