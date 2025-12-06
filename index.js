@@ -1,7 +1,6 @@
 // index.js
 import express from 'express';
 import { Client, middleware } from '@line/bot-sdk';
-import fetch from 'node-fetch'; // Node 18+ では不要かも
 
 const app = express();
 
