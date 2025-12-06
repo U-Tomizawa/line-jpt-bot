@@ -1,7 +1,6 @@
 // index.js
 import express from 'express';
 import bodyParser from 'body-parser';
-import fetch from 'node-fetch'; // Node 18+ なら不要
 import { Client, middleware } from '@line/bot-sdk';
 
 const app = express();
@@ -84,7 +83,6 @@ function getUserHistory(userId) {
 async function getGPTResponse(userId, userMessage) {
   addUserHistory(userId, "user", userMessage);
 
-  // 履歴 + システムプロンプトを送信
   const messages = [
     { role: "system", content: UME_PROMPT },
     ...getUserHistory(userId)
@@ -97,7 +95,7 @@ async function getGPTResponse(userId, userMessage) {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: "gpt-5-mini",
+      model: "gpt-4.1-mini", // gpt-5-mini でも可
       messages: messages,
       temperature: 0.7
     })
