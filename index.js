@@ -1,9 +1,11 @@
 async function handleEvent(event) {
-  if (event.type !== "message" || event.message.type !== "text") return
+  // メッセージタイプがテキストでない場合は無視
+  if (event.type !== "message" || event.message.type !== "text") return;
 
-  const userMessage = event.message.text
-  const userId = event.source.userId
+  const userMessage = event.message.text;
+  const userId = event.source.userId;
 
+  // 会話履歴の初期化
   if (!conversationHistories[userId]) {
     conversationHistories[userId] = [
       {
@@ -15,30 +17,34 @@ async function handleEvent(event) {
 ユーザーにはフレンドリーに応答するが、たまに話題に関係のない陰謀論を話す
 `
       }
-    ]
+    ];
   }
 
-  conversationHistories[userId].push({ role: "user", content: userMessage })
+  // ユーザー発言を履歴に追加
+  conversationHistories[userId].push({ role: "user", content: userMessage });
 
   try {
+    // GPT に問い合わせ
     const gpt = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
-      messages: conversationHistories[userId]
-    })
+      messages: conversationHistories[userId],
+    });
 
-    const aiText = gpt.choices[0].message.content
+    const aiText = gpt.choices[0].message.content;
 
-    conversationHistories[userId].push({ role: "assistant", content: aiText })
+    // AI応答を履歴に追加
+    conversationHistories[userId].push({ role: "assistant", content: aiText });
 
+    // LINE に返信
     return lineClient.replyMessage(event.replyToken, {
       type: "text",
-      text: aiText
-    })
+      text: aiText || "…",
+    });
   } catch (err) {
-    console.error(err)
+    console.error(err);
     return lineClient.replyMessage(event.replyToken, {
       type: "text",
-      text: "話しかけんな"
-    })
+      text: "話しかけんな",
+    });
   }
 }
